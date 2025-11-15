@@ -1,10 +1,10 @@
 import os
 import urllib.parse
 
-basedir = os.path.abspath(os.path.dirname(_file_))
+basedir = os.path.abspath(os.path.dirname(__file__))
+
 
 class Config(object):
-
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'secret-key'
 
     # Blob storage
@@ -29,7 +29,7 @@ class Config(object):
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Microsoft Authentication (HER values)
+    # Microsoft Authentication (kept as provided)
     CLIENT_ID = "1d33d995-838d-4138-b6fa-89d3ad0c995f"
     CLIENT_SECRET = "wKV8Q~qpZMrP4ML8Rqs9bUoLSdjaqvuO_e3SmatM"
 
