@@ -2,7 +2,6 @@
 Routes and views for the flask application.
 """
 
-from datetime import datetime
 from flask import (
     render_template,
     flash,
@@ -13,38 +12,34 @@ from flask import (
     current_app
 )
 from werkzeug.urls import url_parse
-from config import Config
-from FlaskWebProject import app, db
-from FlaskWebProject.forms import LoginForm, PostForm
 from flask_login import current_user, login_user, logout_user, login_required
-from FlaskWebProject.models import User, Post
-import msal
 import uuid
+import msal
+
+from FlaskWebProject import app, db
+from FlaskWebProject.models import User, Post
+from FlaskWebProject.forms import LoginForm, PostForm
+from config import Config
 
 
 # -----------------------------
 # HOME PAGE
 # -----------------------------
-@app.route('/')
-@app.route('/home')
+@app.route("/")
+@app.route("/home")
 @login_required
 def home():
     posts = Post.query.all()
-    return render_template(
-        'index.html',
-        title='Home Page',
-        posts=posts
-    )
+    return render_template("index.html", title="Home Page", posts=posts)
 
 
 # -----------------------------
-# CREATE NEW POST
+# NEW POST
 # -----------------------------
-@app.route('/new_post', methods=['GET', 'POST'])
+@app.route("/new_post", methods=["GET", "POST"])
 @login_required
 def new_post():
     form = PostForm(request.form)
-
     imageSourceUrl = (
         f"https://{current_app.config['BLOB_ACCOUNT']}.blob.core.windows.net/"
         f"{current_app.config['BLOB_CONTAINER']}/"
@@ -52,50 +47,53 @@ def new_post():
 
     if form.validate_on_submit():
         post = Post()
-        post.save_changes(form, request.files.get('image_path'), current_user.id, new=True)
-        return redirect(url_for('home'))
+        post.save_changes(form, request.files.get("image_path"), current_user.id, new=True)
+        return redirect(url_for("home"))
 
     return render_template(
-        'post.html',
-        title='Create Post',
-        imageSource=imageSourceUrl,
-        form=form
+        "post.html",
+        title="Create Post",
+        form=form,
+        imageSource=imageSourceUrl
     )
 
 
 # -----------------------------
 # EDIT POST
 # -----------------------------
-@app.route('/post/<int:id>', methods=['GET', 'POST'])
+@app.route("/post/<int:id>", methods=["GET", "POST"])
 @login_required
 def post(id):
     post_obj = Post.query.get_or_404(id)
     form = PostForm(formdata=request.form, obj=post_obj)
-
     imageSourceUrl = (
         f"https://{current_app.config['BLOB_ACCOUNT']}.blob.core.windows.net/"
         f"{current_app.config['BLOB_CONTAINER']}/"
     )
 
     if form.validate_on_submit():
-        post_obj.save_changes(form, request.files.get('image_path'), current_user.id)
-        return redirect(url_for('home'))
+        post_obj.save_changes(
+            form,
+            request.files.get("image_path"),
+            current_user.id
+        )
+        return redirect(url_for("home"))
 
     return render_template(
-        'post.html',
-        title='Edit Post',
-        imageSource=imageSourceUrl,
-        form=form
+        "post.html",
+        title="Edit Post",
+        form=form,
+        imageSource=imageSourceUrl
     )
 
 
 # -----------------------------
 # LOGIN
 # -----------------------------
-@app.route('/login', methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
+        return redirect(url_for("home"))
 
     form = LoginForm()
 
@@ -105,40 +103,38 @@ def login():
 
         user = User.query.filter_by(username=username).first()
 
-        # INVALID LOGIN
+        # WRONG CREDENTIALS
         if user is None or not user.check_password(password):
             current_app.logger.info(f"Invalid login attempt for user: {username}")
             flash("Invalid username or password")
-            return redirect(url_for('login'))
+            return redirect(url_for("login"))
 
-        # SUCCESSFUL LOGIN
+        # CORRECT LOGIN
         login_user(user, remember=form.remember_me.data)
         current_app.logger.info(f"{username} logged in successfully")
-
         next_page = request.args.get("next")
+
         if not next_page or url_parse(next_page).netloc != "":
             next_page = url_for("home")
+
         return redirect(next_page)
 
-    # Microsoft Login URL
+    # Generate Microsoft OAuth Login URL
     session["state"] = str(uuid.uuid4())
-    auth_url = _build_auth_url(scopes=Config.SCOPE, state=session["state"])
-
-    return render_template(
-        'login.html',
-        title='Sign In',
-        form=form,
-        auth_url=auth_url
+    auth_url = _build_auth_url(
+        scopes=Config.SCOPE,
+        state=session["state"]
     )
+
+    return render_template("login.html", title="Sign In", form=form, auth_url=auth_url)
 
 
 # -----------------------------
-# AZURE AD AUTH CALLBACK
+# MICROSOFT AUTH CALLBACK
 # -----------------------------
 @app.route(Config.REDIRECT_PATH)
 def authorized():
     if request.args.get("state") != session.get("state"):
-        current_app.logger.warning("State mismatch in MS login")
         return redirect(url_for("home"))
 
     if "error" in request.args:
@@ -158,14 +154,11 @@ def authorized():
             return render_template("auth_error.html", result=result)
 
         session["user"] = result.get("id_token_claims", {})
-        current_app.logger.info("MS Login successful")
 
         admin = User.query.filter_by(username="admin").first()
         if admin:
             login_user(admin)
             current_app.logger.info("admin logged in successfully via MS login")
-        else:
-            current_app.logger.error("Admin user not found in DB")
 
         _save_cache(cache)
 
@@ -175,7 +168,7 @@ def authorized():
 # -----------------------------
 # LOGOUT
 # -----------------------------
-@app.route('/logout')
+@app.route("/logout")
 def logout():
     if current_user.is_authenticated:
         current_app.logger.info(f"{current_user.username} logged out")
