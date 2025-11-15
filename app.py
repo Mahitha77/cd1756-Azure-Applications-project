@@ -1,50 +1,35 @@
-import sys
 import logging
-from flask import Flask, request
+from flask import request, session, redirect, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
-# === 1. FORCE all logs to stdout and INFO level ===
-for h in logging.root.handlers[:]:
-    logging.root.removeHandler(h)
+# Example user store (replace with your DB)
+# password for admin is "secret" (stored as a hash here)
+USER_STORE = {
+    "admin": {
+        "password_hash": generate_password_hash("secret")  # change to your real hash
+    }
+}
 
-handler = logging.StreamHandler(stream=sys.stdout)
-fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-handler.setFormatter(logging.Formatter(fmt=fmt, datefmt="%d-%m-%Y %H:%M:%S"))
-
-root = logging.getLogger()
-root.setLevel(logging.INFO)
-root.addHandler(handler)
-
-# also ensure werkzeug (Flask dev server) uses the same handler
-werk = logging.getLogger('werkzeug')
-werk.setLevel(logging.INFO)
-werk.handlers[:] = []
-werk.addHandler(handler)
-
-# === 2. Create app ===
-app = Flask(__name__)
-
-# === 3. Test route to confirm logging works ===
-@app.route('/ping')
-def ping():
-    logging.info("PING route hit")
-    print("PING-PRINT")   # direct console test
-    return "pong"
-
-# === 4. Example login route: add your real logic here ===
 @app.route('/login', methods=['POST'])
 def login():
-    username = request.form.get('username', '')
+    username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
-    # Put your existing auth logic here; this is test logic
-    if username.lower() == 'admin' and password == 'secret':
-        logging.info("admin logged in successfully")
-        print("LOGIN-PRINT: success")
-        return "ok", 200
-    else:
-        logging.warning("Invalid login attempt for username=%s", username)
-        print("LOGIN-PRINT: invalid")
+
+    logging.info("Login attempt for username=%s", username)
+
+    # 1) must find user
+    user = USER_STORE.get(username)
+    if not user:
+        logging.warning("Invalid login attempt: username not found: %s", username)
         return "unauthorized", 401
 
-if __name__ == "__main__":
-    # local debug only
-    app.run(host="0.0.0.0", port=8000)
+    # 2) check password properly (never compare raw hashes or use wrong operators)
+    if not check_password_hash(user['password_hash'], password):
+        logging.warning("Invalid login attempt for user: %s", username)
+        return "unauthorized", 401
+
+    # 3) success: set session (only now) and return
+    session.clear()
+    session['user'] = username
+    logging.info("admin logged in successfully for user=%s", username)
+    return "ok", 200
